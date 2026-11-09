@@ -1,5 +1,51 @@
 # jeth
 
+## Combined performance branch (2026-11-09)
+
+This branch combines Jeth PRs #23–#34 for integration testing; each change remains
+reviewable in its individual PR. It contains no experimental prefix cache,
+interpreter replacement, or unsubmitted packed-trie changes. The guest SDK remains
+pinned to `8e536f199735ac8187156aa589ed1387722a079a`.
+
+With native advice and guest features
+`guest,keccak-cache,kzg-residue,bn254-pairing-residue` (no default features), expanded
+trace counts are:
+
+| Ethereum block | Main `dac77ea` | Combined PRs |
+|---|---:|---:|
+| 26235156 | 91,332,907 | 88,255,663 |
+| 26235168 | 549,152,419 | 475,368,265 |
+| 26235159 | 919,682,516 | 810,068,193 |
+
+All three preserve canonical block hash and gas. The small block also has a
+complete CPU Akita proof accepted by both parallel and single-threaded verifiers
+(106,514 bytes). Local checks pass: 83 default workspace tests, 113 tests with the
+native-advice and pairing features, and strict default Clippy. These counts are
+not prover-time speedup measurements. The faster
+research-build counts quoted elsewhere include additional changes and a newer SDK.
+
+Use Rust 1.95 and a Jolt CLI from the pinned SDK revision. Build the guest from
+`crates/guest` with `JOLT_FUNC_NAME=validate_block`, `JOLT_BACKTRACE=1`, and:
+
+```sh
+jolt build -p jeth-guest --backtrace off --stack-size 33554432 --heap-size 1610612736 -- \
+  --release --no-default-features --features guest,keccak-cache,kzg-residue,bn254-pairing-residue
+```
+
+Generate matching advice from the repository root:
+
+```sh
+cargo run --release --locked -p jeth-core --example native-advice --features \
+  native-advice,secp-inline,sha2-inline,blake2-inline,blake2f-inline,p256-inline,bigint-inline,bn254-inline,bls12-381-inline,code-library,kzg-residue,bn254-pairing-residue \
+  -- INPUT.jef.bin advice.bin
+```
+
+Supply this as **untrusted runtime advice**. The measured configuration uses the
+128 MiB committed-input entry point, not `validate_block_16m`: maximum input
+134217728, output 4096, heap 1610612736, stack 33554432, and both advice budgets 4096.
+The two residue features must match between the native producer and guest.
+
+
 Jolt proving Ethereum: stateless execution of a full, recent Ethereum mainnet block inside a Jolt RISC-V guest (pre-state witness → execute all txs → assert post-state root against the header), traced — not proved — to measure RISC-V cycle count and cycles/gas.
 
 Status: **optimization campaign in progress**. Current: the ten-block mainnet set 25905781–25905790 validates at **13.65 cycles/gas** (gas-weighted, fully self-verifying, 2026-09-10) — from 513 c/g stock. See [RESULTS.md](RESULTS.md) for the full ladder, row-exact profiles, quartering plan, and proving memo; design in [PLAN.md](PLAN.md).
