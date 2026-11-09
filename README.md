@@ -2,25 +2,25 @@
 
 ## Combined performance branch (2026-11-09)
 
-This branch combines Jeth PRs #23–#35 for integration testing; each change remains
-reviewable in its individual PR. It contains no experimental prefix cache,
-interpreter replacement, or unsubmitted packed-trie changes. The guest SDK remains
+This branch combines Jeth PRs #23–#36 for integration testing; each change remains
+reviewable in its individual PR. It includes the bounded, checked trie-prefix cache
+from #36, but no interpreter replacement or unsubmitted packed-trie changes. The guest SDK remains
 pinned to `8e536f199735ac8187156aa589ed1387722a079a`.
 
 With native advice and guest features
-`guest,keccak-cache,kzg-residue,bn254-pairing-residue` (no default features), expanded
+`guest,keccak-cache,kzg-residue,bn254-pairing-residue,keccak-prefix-cache` (no default features), expanded
 trace counts are:
 
 | Ethereum block | Main `dac77ea` | Combined PRs |
 |---|---:|---:|
-| 26235156 | 91,332,907 | 88,170,922 |
-| 26235168 | 549,152,419 | 473,666,778 |
-| 26235159 | 919,682,516 | 807,159,643 |
+| 26235156 | 91,332,907 | 84,128,991 |
+| 26235168 | 549,152,419 | 459,358,991 |
+| 26235159 | 919,682,516 | 782,446,835 |
 
 All three preserve canonical block hash and gas. The small block also has a
 complete CPU Akita proof accepted by both parallel and single-threaded verifiers
-(106,540 bytes). Local checks pass: 83 default workspace tests, 113 tests with the
-native-advice and pairing features, and strict default Clippy. These counts are
+(106,497 bytes). Local default workspace tests, feature tests, guest differential
+tests and strict Clippy checks pass. These counts are
 not prover-time speedup measurements. The faster
 research-build counts quoted elsewhere include additional changes and a newer SDK.
 
@@ -29,21 +29,21 @@ Use Rust 1.95 and a Jolt CLI from the pinned SDK revision. Build the guest from
 
 ```sh
 jolt build -p jeth-guest --backtrace off --stack-size 33554432 --heap-size 1610612736 -- \
-  --locked --release --no-default-features --features guest,keccak-cache,kzg-residue,bn254-pairing-residue
+  --locked --release --no-default-features --features guest,keccak-cache,kzg-residue,bn254-pairing-residue,keccak-prefix-cache
 ```
 
 Generate matching advice from the repository root:
 
 ```sh
 cargo run --release --locked -p jeth-core --example native-advice --features \
-  native-advice,secp-inline,sha2-inline,blake2-inline,blake2f-inline,p256-inline,bigint-inline,bn254-inline,bls12-381-inline,code-library,kzg-residue,bn254-pairing-residue \
+  native-advice,secp-inline,sha2-inline,blake2-inline,blake2f-inline,p256-inline,bigint-inline,bn254-inline,bls12-381-inline,code-library,kzg-residue,bn254-pairing-residue,keccak-prefix-cache \
   -- INPUT.jef.bin advice.bin
 ```
 
 Supply this as **untrusted runtime advice**. The measured configuration uses the
 128 MiB committed-input entry point, not `validate_block_16m`: maximum input
 134217728, output 4096, heap 1610612736, stack 33554432, and both advice budgets 4096.
-The two residue features must match between the native producer and guest.
+The residue and prefix-cache features must match between the native producer and guest.
 
 
 Jolt proving Ethereum: stateless execution of a full, recent Ethereum mainnet block inside a Jolt RISC-V guest (pre-state witness → execute all txs → assert post-state root against the header), traced — not proved — to measure RISC-V cycle count and cycles/gas.
@@ -92,6 +92,29 @@ The library entry point is `jeth_core::advice::native::record`. It captures word
 from both jeth-core and the vendored MPT encoder, on the calling thread only.
 Recording scopes cannot nest; unwinding discards the tape. The recorder does not
 reset other validation state after a failed run.
+
+### Checked Keccak prefixes
+
+The optional `keccak-prefix-cache` feature reuses states computed by the guest
+while hashing trie nodes of 136–544 bytes. It retains up to three complete
+136-byte input blocks. Advice selects a stored prefix; the guest compares every
+prefix byte before continuing the hash. Advice never supplies the sponge state.
+
+Enable the feature in both the guest and its matching native advice generator.
+The native recorder plans which prefixes will be reused and emits cache misses
+after 131,072 eligible calls. Guest storage is capped at 65,536 entries (22 MiB of
+entry payload); a full cache keeps hashing normally. Hint consumption depends
+only on input length, so different buffer alignments cannot change tape order.
+The interpreted `compute_advice` pass emits cache misses and remains correct;
+use the native planner to obtain the row savings.
+
+The feature is disabled by default. On the combined #23–#35 branch, with native
+advice and all other settings held fixed, it reduces live rows from
+88,170,922 / 473,666,778 / 807,159,643 to
+84,128,991 / 459,358,991 / 782,446,835 for blocks
+26235156 / 26235168 / 26235159: 4.58%, 3.02%, and 3.06% fewer rows.
+These are execution counts, not measured prover-time speedups. Inputs with
+little prefix reuse can be slower with this feature enabled.
 
 ### Smaller committed-input guest
 
