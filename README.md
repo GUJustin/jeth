@@ -22,3 +22,27 @@ used 0.79%, 1.00%, and 1.43% fewer expanded rows, respectively. These are trace
 counts, not end-to-end prover timings. An isolated stream of distinct,
 deliberately colliding 32-/64-byte inputs added 8.5% to the hash routine's row
 count. Workloads with little reuse may therefore be slower with the cache.
+
+## Native advice generation
+
+The optional `jeth-core/native-advice` feature records the untrusted advice words
+emitted during native validation. It can replace the interpreted `compute_advice`
+pass; the proven guest still checks every hint and executes the same instructions.
+
+For the ordinary guest with the code library enabled:
+
+```sh
+cargo run --release -p jeth-core --example native-advice \
+  --features native-advice,secp-inline,code-library,bigint-inline -- input.bin advice.bin
+```
+
+Pass the resulting bytes as Jolt's runtime advice tape, not its trusted-advice
+input. Match the native and guest source revisions, dependencies, and features.
+The example runs one block per process and does not support the trusted-digest
+guest or optional guest features such as lazy analysis. Existing tracing commands
+continue to use the interpreted pass.
+
+The library entry point is `jeth_core::advice::native::record`. It captures words
+from both jeth-core and the vendored MPT encoder, on the calling thread only.
+Recording scopes cannot nest; unwinding discards the tape. The recorder does not
+reset other validation state after a failed run.
