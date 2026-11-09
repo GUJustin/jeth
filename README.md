@@ -2,7 +2,7 @@
 
 ## Combined performance branch (2026-11-09)
 
-This branch combines Jeth PRs #23–#34 for integration testing; each change remains
+This branch combines Jeth PRs #23–#35 for integration testing; each change remains
 reviewable in its individual PR. It contains no experimental prefix cache,
 interpreter replacement, or unsubmitted packed-trie changes. The guest SDK remains
 pinned to `8e536f199735ac8187156aa589ed1387722a079a`.
@@ -13,13 +13,13 @@ trace counts are:
 
 | Ethereum block | Main `dac77ea` | Combined PRs |
 |---|---:|---:|
-| 26235156 | 91,332,907 | 88,255,663 |
-| 26235168 | 549,152,419 | 475,368,265 |
-| 26235159 | 919,682,516 | 810,068,193 |
+| 26235156 | 91,332,907 | 88,170,922 |
+| 26235168 | 549,152,419 | 473,666,778 |
+| 26235159 | 919,682,516 | 807,159,643 |
 
 All three preserve canonical block hash and gas. The small block also has a
 complete CPU Akita proof accepted by both parallel and single-threaded verifiers
-(106,514 bytes). Local checks pass: 83 default workspace tests, 113 tests with the
+(106,540 bytes). Local checks pass: 83 default workspace tests, 113 tests with the
 native-advice and pairing features, and strict default Clippy. These counts are
 not prover-time speedup measurements. The faster
 research-build counts quoted elsewhere include additional changes and a newer SDK.
@@ -29,7 +29,7 @@ Use Rust 1.95 and a Jolt CLI from the pinned SDK revision. Build the guest from
 
 ```sh
 jolt build -p jeth-guest --backtrace off --stack-size 33554432 --heap-size 1610612736 -- \
-  --release --no-default-features --features guest,keccak-cache,kzg-residue,bn254-pairing-residue
+  --locked --release --no-default-features --features guest,keccak-cache,kzg-residue,bn254-pairing-residue
 ```
 
 Generate matching advice from the repository root:
