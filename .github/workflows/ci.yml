@@ -86,6 +86,10 @@ jobs:
         run: >-
           cargo nextest run --locked --no-fail-fast -p jeth-core --lib
           --features kzg-residue
+      - name: BN254 residue witnesses
+        run: >-
+          cargo nextest run --locked --no-fail-fast -p jeth-core --lib
+          --features bn254-pairing-residue
       - if: always()
         run: echo "test wall $(( $(date +%s) - JOB_START ))s" >> "$GITHUB_STEP_SUMMARY"
 
